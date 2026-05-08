@@ -1,0 +1,17 @@
+version: '3.8'
+
+# Ce fichier est chargé automatiquement en développement
+# Ne pas utiliser en production
+
+services:
+  netwatch:
+    environment:
+      SPRING_JPA_SHOW_SQL: "true"
+      LOGGING_LEVEL_COM_NETWATCH: DEBUG
+    # En dev, utiliser le jar directement depuis le host
+    # volumes:
+    #   - ./target/netwatch.jar:/app/app.jar
+
+  mysql:
+    ports:
+      - "3306:3306"  # Expose pour connexion depuis DBeaver/MySQL Workbench

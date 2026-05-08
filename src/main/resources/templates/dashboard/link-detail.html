@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Détail connexion')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: sidebar(${currentPage}, ${username})}"></div>
+
+<div class="main-content">
+    <div class="topbar">
+        <a th:href="@{/dashboard}" style="color:var(--muted); text-decoration:none; font-size:13px;">← Dashboard</a>
+        <span style="color:var(--border); margin:0 8px;">/</span>
+        <span class="topbar-title" th:text="${link.name}">Connexion</span>
+        <div class="topbar-right">
+            <span th:switch="${link.status.name()}">
+                <span th:case="'UP'" class="badge badge-up">● UP</span>
+                <span th:case="'DOWN'" class="badge badge-down">● DOWN</span>
+                <span th:case="'DEGRADED'" class="badge badge-degraded">◐ DÉGRADÉ</span>
+                <span th:case="*" class="badge badge-unknown">? INCONNU</span>
+            </span>
+            <button class="btn btn-primary" th:attr="onclick='pingNow(' + ${link.id} + ')'">⟳ Ping maintenant</button>
+        </div>
+    </div>
+
+    <div class="page-content">
+
+        <!-- Info cards -->
+        <div class="grid grid-4" style="margin-bottom:24px;">
+            <div class="stat-card accent">
+                <div class="stat-value" style="font-size:24px;" th:text="${link.ipAddress}">—</div>
+                <div class="stat-label">Adresse IP</div>
+            </div>
+            <div class="stat-card" th:classappend="${link.uptimePercentage > 90 ? 'up' : (link.uptimePercentage > 50 ? 'yellow' : 'down')}">
+                <div class="stat-value" th:text="${#numbers.formatDecimal(link.uptimePercentage, 1, 1) + '%'}">0%</div>
+                <div class="stat-label">Disponibilité</div>
+            </div>
+            <div class="stat-card accent">
+                <div class="stat-value" th:text="${link.responseTimeMs != null ? link.responseTimeMs + 'ms' : '—'}">—</div>
+                <div class="stat-label">Latence actuelle</div>
+            </div>
+            <div class="stat-card down">
+                <div class="stat-value" th:text="${link.consecutiveFailures}">0</div>
+                <div class="stat-label">Échecs consécutifs</div>
+            </div>
+        </div>
+
+        <div class="grid grid-2" style="margin-bottom:24px;">
+            <!-- Stats détaillées -->
+            <div class="card">
+                <div class="card-title">📊 Statistiques</div>
+                <table>
+                    <tr>
+                        <td style="color:var(--muted)">Total pings</td>
+                        <td style="color:var(--text); font-weight:600;" th:text="${link.totalPings}">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--muted)">Pings réussis</td>
+                        <td style="color:var(--green); font-weight:600;" th:text="${link.successfulPings}">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--muted)">Pings échoués</td>
+                        <td style="color:var(--red); font-weight:600;" th:text="${link.totalPings - link.successfulPings}">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--muted)">Dernier succès</td>
+                        <td th:text="${link.lastSuccessAt != null ? #temporals.format(link.lastSuccessAt, 'dd/MM/yyyy HH:mm:ss') : 'N/A'}">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--muted)">Dernière panne</td>
+                        <td th:text="${link.lastFailureAt != null ? #temporals.format(link.lastFailureAt, 'dd/MM/yyyy HH:mm:ss') : 'Aucune'}">—</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--muted)">Ajouté le</td>
+                        <td th:text="${#temporals.format(link.createdAt, 'dd/MM/yyyy HH:mm')}">—</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Graphique latence -->
+            <div class="card">
+                <div class="card-title">📈 Latence (24 dernières heures)</div>
+                <canvas id="latencyChart" height="150"></canvas>
+            </div>
+        </div>
+
+        <!-- Historique pings -->
+        <div class="card" style="margin-bottom:24px;">
+            <div class="card-title">🕐 Historique des pings récents</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date/Heure</th>
+                        <th>Résultat</th>
+                        <th>Latence</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="ping : ${recentPings}">
+                        <td th:text="${#temporals.format(ping.pingedAt, 'dd/MM/yyyy HH:mm:ss')}">—</td>
+                        <td>
+                            <span th:if="${ping.success}" class="badge badge-up">✓ OK</span>
+                            <span th:unless="${ping.success}" class="badge badge-down">✗ FAIL</span>
+                        </td>
+                        <td>
+                            <span th:if="${ping.responseTimeMs != null}" th:text="${ping.responseTimeMs + 'ms'}"
+                                  th:style="${ping.responseTimeMs > 200 ? 'color:var(--yellow)' : 'color:var(--green)'}">—</span>
+                            <span th:unless="${ping.responseTimeMs != null}" style="color:var(--muted)">—</span>
+                        </td>
+                        <td style="color:var(--muted); font-size:12px;" th:text="${ping.errorMessage != null ? ping.errorMessage : '—'}">—</td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(recentPings)}">
+                        <td colspan="4" style="text-align:center; padding:30px; color:var(--muted);">Aucun ping enregistré.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Alertes de ce lien -->
+        <div class="card">
+            <div class="card-title">🔔 Alertes émises pour cette connexion</div>
+            <table>
+                <thead>
+                    <tr><th>Type</th><th>Canal</th><th>Destinataire</th><th>Date</th><th>Statut</th></tr>
+                </thead>
+                <tbody>
+                    <tr th:each="alert : ${alerts}">
+                        <td>
+                            <span th:if="${alert.type.name() == 'LINK_DOWN'}" class="badge badge-down">↓ DOWN</span>
+                            <span th:if="${alert.type.name() == 'LINK_UP'}" class="badge badge-up">↑ UP</span>
+                        </td>
+                        <td><code th:text="${alert.channel}">—</code></td>
+                        <td th:text="${alert.recipientEmail != null ? alert.recipientEmail : alert.recipientPhone}">—</td>
+                        <td style="font-size:12px;" th:text="${#temporals.format(alert.sentAt, 'dd/MM HH:mm')}">—</td>
+                        <td>
+                            <span th:if="${alert.success}" class="badge badge-up">✓</span>
+                            <span th:unless="${alert.success}" class="badge badge-down">✗</span>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(alerts)}">
+                        <td colspan="5" style="text-align:center; padding:20px; color:var(--muted);">Aucune alerte pour cette connexion.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div id="toast" style="position:fixed; bottom:24px; right:24px; z-index:300; display:none;">
+    <div id="toast-inner" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 18px; font-size:13px; box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+        <span id="toast-msg"></span>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script th:inline="javascript">
+const linkId = /*[[${link.id}]]*/ 0;
+
+function showToast(msg, color) {
+    document.getElementById('toast-msg').textContent = msg;
+    document.getElementById('toast-inner').style.borderColor = color;
+    document.getElementById('toast').style.display = 'block';
+    setTimeout(() => document.getElementById('toast').style.display = 'none', 3500);
+}
+
+function pingNow(id) {
+    showToast('Ping en cours...', 'var(--accent)');
+    fetch('/api/links/' + id + '/ping', { method: 'POST' })
+        .then(r => r.json())
+        .then(d => showToast(d.message, d.success ? 'var(--green)' : 'var(--red)'));
+}
+
+// Load latency chart
+let chart;
+fetch('/api/links/' + linkId + '/history?hours=24')
+    .then(r => r.json())
+    .then(data => {
+        const success = data.filter(d => d.success && d.responseTimeMs);
+        const labels = success.map(d => new Date(d.time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}));
+        const values = success.map(d => d.responseTimeMs);
+
+        const ctx = document.getElementById('latencyChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels.slice(-50),
+                datasets: [{
+                    label: 'Latence (ms)',
+                    data: values.slice(-50),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59,130,246,0.1)',
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#475569', font: { size: 10 } }, grid: { color: '#1e293b' } },
+                    y: { ticks: { color: '#475569' }, grid: { color: '#1e293b' }, beginAtZero: true }
+                }
+            }
+        });
+    });
+</script>
+</body>
+</html>

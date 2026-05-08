@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments/layout :: head('Tableau de bord')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: sidebar(${currentPage}, ${username})}"></div>
+
+<div class="main-content">
+    <div class="topbar">
+        <span class="topbar-title">Tableau de bord</span>
+        <div class="topbar-right">
+            <div class="live-badge">
+                <div class="dot"></div>
+                Live · MAJ toutes les <span id="interval-display">60</span>s
+            </div>
+            <span id="last-update" style="font-size:11px; color:var(--muted);">—</span>
+        </div>
+    </div>
+
+    <div class="page-content">
+
+        <!-- Flash messages -->
+        <div th:if="${successMsg}" class="alert alert-success" th:text="${successMsg}"></div>
+        <div th:if="${errorMsg}" class="alert alert-danger" th:text="${errorMsg}"></div>
+
+        <!-- STATS GRID -->
+        <div class="grid grid-4" style="margin-bottom: 24px;">
+            <div class="stat-card up">
+                <div class="stat-value" id="stat-up" th:text="${stats.up}">0</div>
+                <div class="stat-label">🟢 Disponibles</div>
+            </div>
+            <div class="stat-card down">
+                <div class="stat-value" id="stat-down" th:text="${stats.down}">0</div>
+                <div class="stat-label">🔴 Indisponibles</div>
+            </div>
+            <div class="stat-card accent">
+                <div class="stat-value" id="stat-uptime" th:text="${#numbers.formatDecimal(stats.avgUptime, 1, 1) + '%'}">0%</div>
+                <div class="stat-label">📊 Disponibilité moy.</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="stat-value" id="stat-alerts" th:text="${stats.totalAlerts}">0</div>
+                <div class="stat-label">🔔 Alertes totales</div>
+            </div>
+        </div>
+
+        <!-- LINKS TABLE -->
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-title">
+                📡 Connexions Surveillées
+                <span style="margin-left: auto; font-size:11px; font-weight:400; color:var(--muted);" th:text="${stats.total} + ' connexion(s)'"></span>
+            </div>
+
+            <table id="links-table">
+                <thead>
+                    <tr>
+                        <th>Statut</th>
+                        <th>Nom</th>
+                        <th>Adresse IP</th>
+                        <th>Latence</th>
+                        <th>Disponibilité</th>
+                        <th>Dernier ping</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="link : ${links}">
+                        <td>
+                            <span th:switch="${link.status.name()}">
+                                <span th:case="'UP'" class="badge badge-up">● UP</span>
+                                <span th:case="'DOWN'" class="badge badge-down">● DOWN</span>
+                                <span th:case="'DEGRADED'" class="badge badge-degraded">◐ DÉGRADÉ</span>
+                                <span th:case="*" class="badge badge-unknown">? INCONNU</span>
+                            </span>
+                        </td>
+                        <td style="font-weight:600; color:var(--text);" th:text="${link.name}">—</td>
+                        <td><code th:text="${link.ipAddress}">—</code></td>
+                        <td>
+                            <span th:if="${link.responseTimeMs != null}"
+                                  th:text="${link.responseTimeMs} + ' ms'"
+                                  th:style="${link.responseTimeMs > 200 ? 'color:var(--yellow)' : 'color:var(--green)'}">—</span>
+                            <span th:unless="${link.responseTimeMs != null}" style="color:var(--muted)">—</span>
+                        </td>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <div style="width:80px; height:6px; background:var(--border); border-radius:3px; overflow:hidden;">
+                                    <div th:style="'width:' + ${link.uptimePercentage} + '%; height:100%; background:' + (${link.uptimePercentage} > 90 ? 'var(--green)' : (${link.uptimePercentage} > 50 ? 'var(--yellow)' : 'var(--red)')) + '; border-radius:3px;'"></div>
+                                </div>
+                                <span th:text="${#numbers.formatDecimal(link.uptimePercentage, 1, 1) + '%'}" style="font-size:12px;">—</span>
+                            </div>
+                        </td>
+                        <td style="font-size:12px; color:var(--muted);"
+                            th:text="${link.lastPingAt != null ? #temporals.format(link.lastPingAt, 'dd/MM HH:mm:ss') : 'Jamais'}">—</td>
+                        <td>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn btn-ghost" style="padding:5px 10px;"
+                                        th:attr="onclick='pingLink(' + ${link.id} + ')'">
+                                    ⟳ Ping
+                                </button>
+                                <a th:href="@{/links/{id}(id=${link.id})}" class="btn btn-ghost" style="padding:5px 10px;">
+                                    📈 Détail
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(links)}">
+                        <td colspan="7" style="text-align:center; padding:40px; color:var(--muted);">
+                            Aucune connexion configurée. <a th:href="@{/admin/links}" style="color:var(--accent)">Ajouter des connexions →</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- RECENT ALERTS -->
+        <div class="card">
+            <div class="card-title">
+                🔔 Dernières Alertes
+                <a th:href="@{/admin/links}" style="margin-left:auto; font-size:11px; color:var(--accent); text-decoration:none;">Voir tout →</a>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Connexion</th>
+                        <th>Canal</th>
+                        <th>Destinataire</th>
+                        <th>Date</th>
+                        <th>Statut</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="alert : ${recentAlerts}">
+                        <td>
+                            <span th:if="${alert.type.name() == 'LINK_DOWN'}" class="badge badge-down">↓ DOWN</span>
+                            <span th:if="${alert.type.name() == 'LINK_UP'}" class="badge badge-up">↑ UP</span>
+                            <span th:if="${alert.type.name() == 'DEGRADED'}" class="badge badge-degraded">◐ DÉGRADÉ</span>
+                        </td>
+                        <td th:text="${alert.link.name}">—</td>
+                        <td><code th:text="${alert.channel}">—</code></td>
+                        <td th:text="${alert.recipientEmail != null ? alert.recipientEmail : alert.recipientPhone}">—</td>
+                        <td style="font-size:12px; color:var(--muted);"
+                            th:text="${#temporals.format(alert.sentAt, 'dd/MM HH:mm')}">—</td>
+                        <td>
+                            <span th:if="${alert.success}" class="badge badge-up">✓ OK</span>
+                            <span th:unless="${alert.success}" class="badge badge-down">✗ Erreur</span>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(recentAlerts)}">
+                        <td colspan="6" style="text-align:center; padding:30px; color:var(--muted);">
+                            Aucune alerte envoyée pour le moment.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" style="position:fixed; bottom:24px; right:24px; z-index:300; display:none; max-width:360px;">
+    <div id="toast-inner" style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 18px; font-size:13px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); display:flex; gap:10px; align-items:flex-start;">
+        <span id="toast-icon">ℹ</span>
+        <div>
+            <div id="toast-title" style="font-weight:600; color:var(--text); margin-bottom:2px;"></div>
+            <div id="toast-msg" style="color:var(--text2);"></div>
+        </div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+const REFRESH_INTERVAL = 30000; // 30 secondes
+
+function showToast(title, msg, type='info') {
+    const colors = { success: 'var(--green)', error: 'var(--red)', info: 'var(--accent)' };
+    const icons = { success: '✓', error: '✗', info: 'ℹ' };
+    document.getElementById('toast-title').textContent = title;
+    document.getElementById('toast-msg').textContent = msg;
+    document.getElementById('toast-icon').textContent = icons[type];
+    document.getElementById('toast-icon').style.color = colors[type];
+    document.getElementById('toast').style.display = 'block';
+    setTimeout(() => document.getElementById('toast').style.display = 'none', 4000);
+}
+
+function pingLink(id) {
+    showToast('Ping en cours...', 'Envoi du ping sur la connexion...', 'info');
+    fetch('/api/links/' + id + '/ping', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            const type = data.success ? 'success' : 'error';
+            showToast(data.success ? '🟢 Connexion disponible' : '🔴 Connexion indisponible', data.message, type);
+            refreshStatus();
+        })
+        .catch(() => showToast('Erreur', 'Impossible de contacter le serveur.', 'error'));
+}
+
+function refreshStatus() {
+    fetch('/api/links/status')
+        .then(r => r.json())
+        .then(links => {
+            document.getElementById('last-update').textContent =
+                'MAJ: ' + new Date().toLocaleTimeString('fr-FR');
+        })
+        .catch(() => {});
+
+    fetch('/api/stats')
+        .then(r => r.json())
+        .then(s => {
+            document.getElementById('stat-up').textContent = s.up;
+            document.getElementById('stat-down').textContent = s.down;
+            document.getElementById('stat-uptime').textContent = s.avgUptime + '%';
+            document.getElementById('stat-alerts').textContent = s.totalAlerts;
+        });
+}
+
+// Auto-refresh
+setInterval(() => { refreshStatus(); }, REFRESH_INTERVAL);
+document.getElementById('interval-display').textContent = REFRESH_INTERVAL / 1000;
+refreshStatus();
+</script>
+</body>
+</html>

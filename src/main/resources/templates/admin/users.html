@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Gestion Utilisateurs')}"></head>
+<body>
+
+<div th:replace="~{fragments/layout :: sidebar(${currentPage}, ${username})}"></div>
+
+<div class="main-content">
+    <div class="topbar">
+        <span class="topbar-title">👥 Gestion des Utilisateurs</span>
+        <div class="topbar-right">
+            <button class="btn btn-primary" onclick="document.getElementById('modal-create').classList.add('show')">
+                + Nouvel utilisateur
+            </button>
+        </div>
+    </div>
+
+    <div class="page-content">
+
+        <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
+        <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+        <div class="card">
+            <div class="card-title">Utilisateurs (<span th:text="${#lists.size(users)}">0</span>)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Utilisateur</th>
+                        <th>Email</th>
+                        <th>Rôle</th>
+                        <th>Notifications</th>
+                        <th>Statut</th>
+                        <th>Dernière connexion</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="user : ${users}">
+                        <td>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <div style="width:32px;height:32px;background:linear-gradient(135deg,var(--accent),#7c3aed);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;"
+                                     th:text="${user.fullName?.substring(0,1) ?: user.username?.substring(0,1)?.toUpperCase()}">A</div>
+                                <div>
+                                    <div style="font-weight:600;color:var(--text);" th:text="${user.username}">—</div>
+                                    <div style="font-size:11px;color:var(--muted);" th:text="${user.fullName}">—</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td th:text="${user.email}">—</td>
+                        <td>
+                            <span th:if="${user.role.name() == 'ADMIN'}" class="badge badge-admin">ADMIN</span>
+                            <span th:unless="${user.role.name() == 'ADMIN'}" class="badge badge-user">USER</span>
+                        </td>
+                        <td>
+                            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                                <span th:if="${user.notifyEmail}" class="badge badge-up" style="font-size:10px;">✉ Email</span>
+                                <span th:if="${user.notifyWhatsapp}" class="badge badge-up" style="font-size:10px;background:rgba(37,211,102,0.15);color:#25d366;">📱 WhatsApp</span>
+                                <span th:unless="${user.notifyEmail or user.notifyWhatsapp}" style="color:var(--muted);font-size:12px;">Aucune</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span th:if="${user.enabled}" class="badge badge-up">Actif</span>
+                            <span th:unless="${user.enabled}" class="badge badge-down">Désactivé</span>
+                        </td>
+                        <td style="font-size:12px;color:var(--muted);"
+                            th:text="${user.lastLogin != null ? #temporals.format(user.lastLogin, 'dd/MM HH:mm') : 'Jamais'}">—</td>
+                        <td>
+                            <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                                <!-- Toggle actif/inactif -->
+                                <form th:action="@{/admin/users/{id}/toggle(id=${user.id})}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-ghost" style="padding:5px 8px;"
+                                            th:text="${user.enabled ? 'Désactiver' : 'Activer'}">
+                                    </button>
+                                </form>
+                                <!-- Notification config -->
+                                <button class="btn btn-ghost" style="padding:5px 8px;"
+                                        th:attr="onclick='openNotifModal(' + ${user.id} + ', ' + ${user.notifyEmail} + ', ' + ${user.notifyWhatsapp} + ', \'' + (${user.whatsappNumber} ?: '') + '\', \'' + (${user.whatsappApiKey} ?: '') + '\')'">
+                                    🔔
+                                </button>
+                                <!-- Reset password -->
+                                <button class="btn btn-ghost" style="padding:5px 8px;"
+                                        th:attr="onclick='openPwdModal(' + ${user.id} + ')'">🔑</button>
+                                <!-- Supprimer -->
+                                <form th:action="@{/admin/users/{id}/delete(id=${user.id})}" method="post" style="display:inline;"
+                                      onsubmit="return confirm('Supprimer cet utilisateur ?')">
+                                    <button type="submit" class="btn btn-danger" style="padding:5px 8px;">✕</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal créer utilisateur -->
+<div class="modal-overlay" id="modal-create" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="modal">
+        <span class="modal-close" onclick="document.getElementById('modal-create').classList.remove('show')">×</span>
+        <div class="modal-title">👤 Créer un utilisateur</div>
+        <form th:action="@{/admin/users/create}" method="post">
+            <div class="form-group">
+                <label class="form-label">Nom d'utilisateur *</label>
+                <input class="form-control" type="text" name="username" required placeholder="john.doe">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nom complet</label>
+                <input class="form-control" type="text" name="fullName" placeholder="John Doe">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email *</label>
+                <input class="form-control" type="email" name="email" required placeholder="john@icone-communication.ci">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Mot de passe *</label>
+                <input class="form-control" type="password" name="password" required minlength="8">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Rôle *</label>
+                <select class="form-control" name="role" required>
+                    <option value="USER">User — Lecture seule</option>
+                    <option value="ADMIN">Admin — Accès complet</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button type="submit" class="btn btn-primary">Créer l'utilisateur</button>
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-create').classList.remove('show')">Annuler</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal notifications -->
+<div class="modal-overlay" id="modal-notif" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="modal">
+        <span class="modal-close" onclick="document.getElementById('modal-notif').classList.remove('show')">×</span>
+        <div class="modal-title">🔔 Préférences de notification</div>
+        <form id="form-notif" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" id="notif-email" name="notifyEmail" value="true">
+                    <span class="form-label" style="margin:0;">✉ Notifications par Email</span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" id="notif-wa" name="notifyWhatsapp" value="true">
+                    <span class="form-label" style="margin:0;">📱 Notifications WhatsApp (CallMeBot)</span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Numéro WhatsApp (format: +225XXXXXXXXXX)</label>
+                <input class="form-control" type="tel" id="wa-number" name="whatsappNumber" placeholder="+22500000000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Clé API CallMeBot</label>
+                <input class="form-control" type="text" id="wa-apikey" name="whatsappApiKey" placeholder="API Key CallMeBot">
+                <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+                    Obtenez votre clé gratuite sur <strong>callmebot.com/whatsapp.php</strong>
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button type="submit" class="btn btn-primary">Enregistrer</button>
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-notif').classList.remove('show')">Annuler</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal reset password -->
+<div class="modal-overlay" id="modal-pwd" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="modal">
+        <span class="modal-close" onclick="document.getElementById('modal-pwd').classList.remove('show')">×</span>
+        <div class="modal-title">🔑 Réinitialiser le mot de passe</div>
+        <form id="form-pwd" method="post">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <div class="form-group">
+                <label class="form-label">Nouveau mot de passe</label>
+                <input class="form-control" type="password" name="newPassword" required minlength="8"
+                       placeholder="Minimum 8 caractères">
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button type="submit" class="btn btn-primary">Réinitialiser</button>
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-pwd').classList.remove('show')">Annuler</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openNotifModal(userId, email, wa, waNumber, waKey) {
+    document.getElementById('form-notif').action = '/admin/users/' + userId + '/update-notifications';
+    document.getElementById('notif-email').checked = email;
+    document.getElementById('notif-wa').checked = wa;
+    document.getElementById('wa-number').value = waNumber;
+    document.getElementById('wa-apikey').value = waKey;
+    document.getElementById('modal-notif').classList.add('show');
+}
+
+function openPwdModal(userId) {
+    document.getElementById('form-pwd').action = '/admin/users/' + userId + '/reset-password';
+    document.getElementById('modal-pwd').classList.add('show');
+}
+</script>
+</body>
+</html>

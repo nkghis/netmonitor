@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+
+  # ===== MySQL Database =====
+  mysql:
+    image: mysql:8.0
+    container_name: netwatch-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_netwatch_2024}
+      MYSQL_DATABASE: ${DB_NAME:-netwatch}
+      MYSQL_USER: ${DB_USER:-netwatch}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-netwatch123}
+    ports:
+      - "${DB_PORT_EXPOSED:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=100
+      --innodb_buffer_pool_size=256M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root_netwatch_2024}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - netwatch-net
+
+  # ===== NetWatch Application =====
+  netwatch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: netwatch-app
+    restart: unless-stopped
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    environment:
+      # Database
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-netwatch}
+      DB_USER: ${DB_USER:-netwatch}
+      DB_PASSWORD: ${DB_PASSWORD:-netwatch123}
+
+      # Mail (Gmail ou autre SMTP)
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-votre-email@gmail.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-votre-app-password}
+
+      # Monitoring
+      PING_INTERVAL: ${PING_INTERVAL:-60}
+      PING_TIMEOUT: ${PING_TIMEOUT:-5000}
+      ALERT_THRESHOLD: ${ALERT_THRESHOLD:-3}
+      RECOVERY_CHECK: ${RECOVERY_CHECK:-2}
+
+      # WhatsApp (optionnel)
+      WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
+
+      # Security
+      JWT_SECRET: ${JWT_SECRET:-NetWatch2024SecureKeyForJWTTokenGenerationAtLeast256BitsLong!}
+
+      # Server
+      SERVER_PORT: 8080
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - netwatch-net
+    # Nécessaire pour que ping ICMP fonctionne depuis le conteneur
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    # ✅ Forcer DNS externe
+    dns:
+          - 8.8.8.8
+          - 1.1.1.1
+    # ✅ Autoriser le ping ICMP non-root
+    sysctls:
+          - net.ipv4.ping_group_range=0 2147483647
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  netwatch-net:
+    driver: bridge
+    # ✅ Activer l'accès internet depuis le bridge
+    driver_opts:
+        com.docker.network.bridge.enable_ip_masquerade: "true"
