@@ -51,6 +51,15 @@ public class NotificationService {
     }
 
     @Async
+    public void sendLinkDegradedAlert(Link link) {
+        String subject = "🟡 ALERTE - Lien " + link.getName() + " DÉGRADÉ";
+        String htmlBody = buildDegradedAlertHtml(link);
+        String textBody = buildDegradedAlertText(link);
+
+        sendToAllRecipients(link, subject, htmlBody, textBody, AlertLog.AlertType.DEGRADED);
+    }
+
+    @Async
     public void sendLinkUpAlert(Link link) {
         String subject = "🟢 RÉTABLI - Lien " + link.getName() + " est de nouveau disponible";
         String htmlBody = buildUpAlertHtml(link);
@@ -135,6 +144,56 @@ public class NotificationService {
     }
 
     // ===== Templates HTML Email =====
+
+    private String buildDegradedAlertHtml(Link link) {
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="UTF-8"></head>
+            <body style="font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px;">
+              <div style="max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                <div style="background: #fd7e14; padding: 20px; text-align: center;">
+                  <h1 style="color: #fff; margin: 0; font-size: 24px;">🟡 LIEN DÉGRADÉ</h1>
+                </div>
+                <div style="padding: 30px;">
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 8px; font-weight: bold; color: #666;">Connexion</td>
+                        <td style="padding: 8px; color: #333;">""" + link.getName() + """
+                    </td></tr>
+                    <tr><td style="padding: 8px; font-weight: bold; color: #666;">Adresse IP</td>
+                        <td style="padding: 8px; color: #333; font-family: monospace;">""" + link.getIpAddress() + """
+                    </td></tr>
+                    <tr><td style="padding: 8px; font-weight: bold; color: #666;">Détecté le</td>
+                        <td style="padding: 8px; color: #333;">""" + (link.getLastFailureAt() != null ? link.getLastFailureAt().format(FORMATTER) : "N/A") + """
+                    </td></tr>
+                    <tr><td style="padding: 8px; font-weight: bold; color: #666;">Échecs consécutifs</td>
+                        <td style="padding: 8px; color: #fd7e14; font-weight: bold;">""" + link.getConsecutiveFailures() + """
+                    </td></tr>
+                    <tr><td style="padding: 8px; font-weight: bold; color: #666;">Disponibilité</td>
+                        <td style="padding: 8px; color: #333;">""" + String.format("%.1f%%", link.getUptimePercentage()) + """
+                    </td></tr>
+                  </table>
+                  <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 15px; margin-top: 20px;">
+                    <strong>⚠️ Avertissement :</strong> Des pertes de paquets ont été détectées. Surveillez ce lien, une indisponibilité totale est possible.
+                  </div>
+                </div>
+                <div style="background: #f8f9fa; padding: 15px; text-align: center; color: #666; font-size: 12px;">
+                  NetWatch Monitor | Ivoire Cartes Systemes | Abidjan, Côte d'Ivoire
+                </div>
+              </div>
+            </body>
+            </html>
+            """;
+    }
+
+    private String buildDegradedAlertText(Link link) {
+        return String.format(
+            "🟡 ALERTE NETWATCH\n\nLien DÉGRADÉ !\n\nConnexion : %s\nIP : %s\nDétecté le : %s\nÉchecs : %d\nDisponibilité : %.1f%%\n\nSurveillance recommandée.\n\n-- NetWatch | Ivoire Cartes Systemes",
+            link.getName(), link.getIpAddress(),
+            link.getLastFailureAt() != null ? link.getLastFailureAt().format(FORMATTER) : "N/A",
+            link.getConsecutiveFailures(), link.getUptimePercentage()
+        );
+    }
 
     private String buildDownAlertHtml(Link link) {
         return """

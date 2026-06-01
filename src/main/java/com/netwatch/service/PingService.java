@@ -136,26 +136,58 @@ public class PingService {
     }*/
 
     private void handleStatusChange(Link link, Link.LinkStatus previousStatus, boolean success) {
-        if (!success && link.getConsecutiveFailures() >= alertThreshold) {
-            // Lien down - première alerte ou lien toujours down
-            if (!link.isAlertSent()) {
-                link.setStatus(Link.LinkStatus.DOWN);
+        Link.LinkStatus newStatus = computeNewStatus(link, previousStatus, success);
+
+        if (newStatus == previousStatus) {
+            return;
+        }
+
+        link.setStatus(newStatus);
+
+        switch (newStatus) {
+            case DOWN -> {
                 link.setAlertSent(true);
                 log.warn("🔴 LIEN DOWN : {} ({}) - {} échecs consécutifs",
-                    link.getName(), link.getIpAddress(), link.getConsecutiveFailures());
+                        link.getName(), link.getIpAddress(), link.getConsecutiveFailures());
                 notificationService.sendLinkDownAlert(link);
             }
-        } else if (success && link.getConsecutiveSuccesses() >= recoveryCheckCount
-                   && previousStatus == Link.LinkStatus.DOWN) {
-            // Lien rétabli
-            link.setStatus(Link.LinkStatus.UP);
-            link.setAlertSent(false);
-            log.info("🟢 LIEN RÉTABLI : {} ({}) - {} succès consécutifs",
-                link.getName(), link.getIpAddress(), link.getConsecutiveSuccesses());
-            notificationService.sendLinkUpAlert(link);
-        } else if (!success && link.getConsecutiveFailures() > 0
-                   && link.getConsecutiveFailures() < alertThreshold) {
-            link.setStatus(Link.LinkStatus.DEGRADED);
+            case DEGRADED -> {
+                link.setAlertSent(true);
+                log.warn("🟡 LIEN DÉGRADÉ : {} ({}) - {} échec(s) consécutif(s)",
+                        link.getName(), link.getIpAddress(), link.getConsecutiveFailures());
+                notificationService.sendLinkDegradedAlert(link);
+            }
+            case UP -> {
+                link.setAlertSent(false);
+                log.info("🟢 LIEN RÉTABLI : {} ({}) - {} succès consécutifs",
+                        link.getName(), link.getIpAddress(), link.getConsecutiveSuccesses());
+                notificationService.sendLinkUpAlert(link);
+            }
+            default -> {}
+        }
+    }
+
+    private Link.LinkStatus computeNewStatus(Link link, Link.LinkStatus previousStatus, boolean success) {
+        if (!success) {
+            if (link.getConsecutiveFailures() >= alertThreshold) {
+                return Link.LinkStatus.DOWN;
+            }
+            if (link.getConsecutiveFailures() > 0 && previousStatus != Link.LinkStatus.DOWN) {
+                // Ne pas rétrograder DOWN en DEGRADED lors d'une récupération partielle
+                return Link.LinkStatus.DEGRADED;
+            }
+            // Lien DOWN avec échecs inférieurs au seuil (oscillation partielle) → reste DOWN
+            return previousStatus;
+        } else {
+            if (link.getConsecutiveSuccesses() >= recoveryCheckCount
+                    && (previousStatus == Link.LinkStatus.DOWN || previousStatus == Link.LinkStatus.DEGRADED)) {
+                return Link.LinkStatus.UP;
+            }
+            if (previousStatus == Link.LinkStatus.UP || previousStatus == Link.LinkStatus.UNKNOWN) {
+                return Link.LinkStatus.UP;
+            }
+            // Pas encore assez de succès consécutifs pour confirmer le rétablissement
+            return previousStatus;
         }
     }
 }

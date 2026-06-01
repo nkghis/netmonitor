@@ -91,7 +91,6 @@ public class Link {
             this.consecutiveFailures = 0;
             this.consecutiveSuccesses++;
             this.lastSuccessAt = LocalDateTime.now();
-            this.status = LinkStatus.UP;
         } else {
             this.consecutiveFailures++;
             this.consecutiveSuccesses = 0;
