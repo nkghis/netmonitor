@@ -39,6 +39,9 @@ public class NotificationService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
+    @Value("${netwatch.notifications.degraded-enabled:false}")
+    private boolean degradedAlertsEnabled;
+
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
     @Async
@@ -52,6 +55,11 @@ public class NotificationService {
 
     @Async
     public void sendLinkDegradedAlert(Link link) {
+        if (!degradedAlertsEnabled) {
+            log.debug("Notification DEGRADED désactivée (netwatch.notifications.degraded-enabled=false) pour {}", link.getName());
+            return;
+        }
+
         String subject = "🟡 ALERTE - Lien " + link.getName() + " DÉGRADÉ";
         String htmlBody = buildDegradedAlertHtml(link);
         String textBody = buildDegradedAlertText(link);
