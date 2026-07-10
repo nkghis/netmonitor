@@ -63,6 +63,7 @@ netwatch:
   notifications:
     from-name: "NetWatch Monitor - Ivoire Cartes Systems"
     subject-prefix: "[NetWatch]"
+    degraded-enabled: ${DEGRADED_NOTIFICATIONS_ENABLED:false}
 
 logging:
   level:
