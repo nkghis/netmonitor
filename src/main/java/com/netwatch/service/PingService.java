@@ -152,16 +152,20 @@ public class PingService {
                 notificationService.sendLinkDownAlert(link);
             }
             case DEGRADED -> {
-                link.setAlertSent(true);
+                // Statut interne uniquement : aucune notification n'est envoyée pour DEGRADED
                 log.warn("🟡 LIEN DÉGRADÉ : {} ({}) - {} échec(s) consécutif(s)",
                         link.getName(), link.getIpAddress(), link.getConsecutiveFailures());
-                notificationService.sendLinkDegradedAlert(link);
             }
             case UP -> {
+                // L'alerte UP ne se justifie qu'en réponse à une alerte DOWN déjà envoyée.
+                // Un retour depuis DEGRADED ou UNKNOWN ne notifie donc rien.
+                boolean retourDepuisDown = previousStatus == Link.LinkStatus.DOWN;
                 link.setAlertSent(false);
-                log.info("🟢 LIEN RÉTABLI : {} ({}) - {} succès consécutifs",
-                        link.getName(), link.getIpAddress(), link.getConsecutiveSuccesses());
-                notificationService.sendLinkUpAlert(link);
+                log.info("🟢 LIEN RÉTABLI : {} ({}) - {} succès consécutifs (précédent : {})",
+                        link.getName(), link.getIpAddress(), link.getConsecutiveSuccesses(), previousStatus);
+                if (retourDepuisDown) {
+                    notificationService.sendLinkUpAlert(link);
+                }
             }
             default -> {}
         }

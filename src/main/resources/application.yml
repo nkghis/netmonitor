@@ -63,7 +63,10 @@ netwatch:
   notifications:
     from-name: "NetWatch Monitor - Ivoire Cartes Systems"
     subject-prefix: "[NetWatch]"
-    degraded-enabled: ${DEGRADED_NOTIFICATIONS_ENABLED:false}
+    # Seuls les statuts UP et DOWN sont notifiés. DEGRADED est un statut interne
+    # (affiché sur le dashboard et dans les logs) et ne déclenche aucune alerte.
+    # L'alerte UP n'est envoyée qu'en retour d'un lien passé DOWN : un rétablissement
+    # depuis DEGRADED ou depuis UNKNOWN (démarrage) reste silencieux.
 
 logging:
   level:
